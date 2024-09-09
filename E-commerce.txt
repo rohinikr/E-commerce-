@@ -1,0 +1,225 @@
+import React, { useState, useEffect } from 'react';
+import { BrowserRouter as Router, Route, Switch } from 'react-router-dom';
+import axios from 'axios';
+
+function App() {
+  const [products, setProducts] = useState([]);
+  const [cart, setCart] = useState([]);
+  const [token, setToken] = useState('');
+  const [orderId, setOrderId] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState('');
+  const [paymentIntentId, setPaymentIntentId] = useState('');
+
+  useEffect(() => {
+    axios.get('/products')
+      .then((response) => setProducts(response.data))
+      .catch((error) => console.error(error));
+  }, []);
+
+  const handleLogin = (username, password) => {
+    axios.post('/login', { username, password })
+      .then((response) => setToken(response.data.token))
+      .catch((error) => console.error(error));
+  };
+
+  const handleRegister = (username, password, email) => {
+    axios.post('/register', { username, password, email })
+      .then((response) => console.log(response.data))
+      .catch((error) => console.error(error));
+  };
+
+  const handleAddToCart = (product) => {
+    setCart([...cart, product]);
+  };
+
+  const handlePlaceOrder = () => {
+    const total = cart.reduce((acc, product) => acc + product.price, 0);
+    axios.post('/place-order', { userId: token, products: cart, total })
+      .then((response) => setOrderId(response.data.orderId))
+      .catch((error) => console.error(error));
+  };
+
+  const handlePay = () => {
+    axios.post('/pay', { orderId, paymentMethod })
+      .then((response) => setPaymentIntentId(response.data.clientSecret))
+      .catch((error) => console.error(error));
+  };
+
+  const handleConfirmPayment = () => {
+    axios.post('/confirm-payment', { orderId, paymentIntentId })
+      .then((response) => console.log(response.data))
+      .catch((error) => console.error(error));
+  };
+
+  return (
+    <Router>
+      <Switch>
+        <Route path="/login">
+          <Login handleLogin={handleLogin} />
+        </Route>
+        <Route path="/register">
+          <Register handleRegister={handleRegister} />
+        </Route>
+        <Route path="/products">
+          <ProductList products={products} handleAddToCart={handleAddToCart} />
+        </Route>
+        <Route path="/cart">
+          <Cart cart={cart} handlePlaceOrder={handlePlaceOrder} />
+        </Route>
+        <Route path="/pay">
+          <Pay handlePay={handlePay} />
+        </Route>
+        <Route path="/confirm-payment">
+          <ConfirmPayment handleConfirmPayment={handleConfirmPayment} />
+        </Route>
+      </Switch>
+    </Router>
+  );
+}
+
+function Login({ handleLogin }) {
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+
+  const handleSubmit = (event) => {
+    event.preventDefault();
+    handleLogin(username, password);
+  };
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <input type="text" value={username} onChange={(event) => setUsername(event.target.value)} />
+      <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} />
+      <button type="submit">Login</button>
+    </form>
+  );
+}
+
+function Register({ handleRegister }) {
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState('');
+
+  const handleSubmit = (event) => {
+    event.preventDefault();
+    handleRegister(username, password, email);
+  };
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <input type="text" value={username} onChange={(event) => setUsername(event.target.value)} />
+      <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} />
+      <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} />
+      <button type="submit">Register</button>
+    </form>
+  );
+}
+
+const express = require('express');
+const mongoose = require('mongoose');
+const jwt = require('jsonwebtoken');
+const stripe = require('stripe')('YOUR_STRIPE_SECRET_KEY');
+
+const app = express();
+
+// Connect to MongoDB
+mongoose.connect('mongodb://localhost/ecommerce', { useNewUrlParser: true, useUnifiedTopology: true });
+
+// Define User model
+const User = mongoose.model('User', {
+  username: String,
+  password: String,
+  email: String,
+  role: String
+});
+
+// Define Product model
+const Product = mongoose.model('Product', {
+  name: Book,
+  description: Good book,
+  image: Birds,
+  originalPrice: 200,
+  discountPrice: 80,
+  sellingPrice: 120,
+  quantity: 1,
+  uom: ftuyk,
+  hsnCode: krvly
+});
+
+// Define Order model
+const Order = mongoose.model('Order', {
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  products: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Product' }],
+  total: 30,
+  paymentMethod: cod,
+  paymentStatus: good
+});
+
+// Implement JWT token handling
+app.post('/login', (req, res) => {
+  const { username, password } = req.body;
+  User.findOne({ username }, (err, user) => {
+    if (err) return res.status(400).send({ message: 'Invalid username or password' });
+    if (!user) return res.status(401).send({ message: 'Invalid username or password' });
+    const token = jwt.sign({ userId: user._id }, 'secretkey', { expiresIn: '1h' });
+    res.send({ token });
+  });
+});
+
+// Implement registration
+app.post('/register', (req, res) => {
+  const { username, password, email } = req.body;
+  User.findOne({ username }, (err, user) => {
+    if (err) return res.status(400).send({ message: 'Invalid username or password' });
+    if (user) return res.status(401).send({ message: 'Username already exists' });
+    const newUser = new User({ username, password, email });
+    newUser.save((err) => {
+      if (err) return res.status(400).send({ message: 'Error creating user' });
+      res.send({ message: 'User created successfully' });
+    });
+  });
+});
+
+// Implement order placement
+app.post('/place-order', (req, res) => {
+  const { userId, products, total } = req.body;
+  const order = new Order({ userId, products, total });
+  order.save((err) => {
+    if (err) return res.status(400).send({ message: 'Error placing order' });
+    res.send({ message: 'Order placed successfully' });
+  });
+});
+
+// Implement payment processing
+app.post('/pay', (req, res) => {
+  const { orderId, paymentMethod } = req.body;
+  Order.findById(orderId, (err, order) => {
+    if (err) return res.status(400).send({ message: 'Invalid order ID' });
+    if (!order) return res.status(401).send({ message: 'Order not found' });
+    const paymentIntent = stripe.paymentIntents.create({
+      amount: order.total,
+      currency: 'usd',
+      payment_method_types: [paymentMethod]
+    });
+    paymentIntent.then((paymentIntent) => {
+      res.send({ clientSecret: paymentIntent.client_secret });
+    });
+  });
+});
+
+// Implement payment confirmation
+app.post('/confirm-payment', (req, res) => {
+  const { orderId, paymentIntentId } = req.body;
+  Order.findById(orderId, (err, order) => {
+    if (err) return res.status(400).send({ message: 'Invalid order ID' });
+    if (!order) return res.status(401).send({ message: 'Order not found' });
+    stripe.paymentIntents.confirm(paymentIntentId, (err, paymentIntent) => {
+      if (err) return res.status(400).send({ message: 'Error confirming payment' });
+      order.paymentStatus = 'paid';
+      order.save((err) => {
+        if (err) return res.status(400).send({ message: 'Error updating order' });
+        res.send({ message: 'Payment confirmed successfully' });
+      });
+    });
+  });
+});
